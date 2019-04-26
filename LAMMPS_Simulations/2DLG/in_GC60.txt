@@ -1,0 +1,112 @@
+# C60 + Graphene: system #2 DLG
+
+package    		gpu 1 neigh no newton off
+suffix      	gpu
+
+dimension		3
+boundary		p p p
+units			metal
+atom_style		atomic
+read_data		G3_12_c60_10.data
+
+group			Graphene		type 2
+group			Graphite		type 1:2
+group			c60				type 3
+group			vector	 		id 11428 11421
+group			point1	 		id 11428
+group			point2	 		id 11421
+group			fixed			type 1 
+
+## potential ##
+pair_style		hybrid tersoff lj/cut 12
+pair_coeff  	* * tersoff  SiC.tersoff C C C
+pair_coeff		2 3 lj/cut 0.0024 3.4					# LJ for Graphene-C60
+pair_coeff		1 2 lj/cut 0.0024 3.4					# LJ for Graphene-fixedlayer
+
+###############################################################################
+velocity		Graphene 	create ${temp} 351648 mom yes rot yes dist gaussian  	#91648
+velocity		c60 		create ${temp} 968399 mom yes rot yes dist gaussian  	#508399
+velocity 		fixed	 	set 0 0 0 units box
+
+## computes ##
+# C60 
+compute 		peratom 	c60 pe/atom
+compute			pe_c60 		c60 reduce sum c_peratom  			#calculates a per-atom vector
+compute			lennard 	c60 group/group Graphene
+compute 		temp_c60 	c60 temp/com
+compute 		ke_c60 		c60 ke
+
+# Graphene
+compute 		peratom_sub Graphene pe/atom
+compute			pe_sub		Graphene reduce sum c_peratom_sub 
+compute			temp_sub 	Graphene temp/com
+compute			ke_sub 		Graphene ke 
+
+# C60 variables
+variable		xc_x equal xcm(c60,x)
+variable		xc_y equal xcm(c60,y)
+variable		xc_z equal xcm(c60,z)
+
+variable		vc_x equal vcm(c60,x)
+variable		vc_y equal vcm(c60,y)
+variable		vc_z equal vcm(c60,z)
+
+variable		wc_x equal omega(c60,x)
+variable		wc_y equal omega(c60,y)
+variable		wc_z equal omega(c60,z)
+
+variable		fc_x equal fcm(c60,x)
+variable		fc_y equal fcm(c60,y)
+variable		fc_z equal fcm(c60,z)
+
+variable		x1_x equal xcm(point1,x)
+variable		x1_y equal xcm(point1,y)
+variable		x1_z equal xcm(point1,z)
+	
+variable		x2_x equal xcm(point2,x)
+variable		x2_y equal xcm(point2,y)
+variable		x2_z equal xcm(point2,z)
+
+variable		w12_x equal omega(vector,x)
+variable		w12_y equal omega(vector,y)
+variable		w12_z equal omega(vector,z)
+
+# Graphene variables
+variable		vsub_x equal vcm(Graphene,x)
+variable		vsub_y equal vcm(Graphene,y)
+variable		vsub_z equal vcm(Graphene,z)
+
+variable		xsub_x equal xcm(Graphene,x)
+variable		xsub_y equal xcm(Graphene,y)
+variable		xsub_z equal xcm(Graphene,z)
+
+## equilibration ##
+timestep		0.001  # 1 fs
+thermo 			200
+thermo_style 	custom step pe lx ly lz press pxx pyy pzz c_pe_sub
+
+fix 			1 all box/relax iso 0.0 vmax 0.001
+
+min_style 		cg 
+minimize 		1e-100 1e-100 10000 10000           #minimize 				1.0e-100 1.0e-100 10000 10000			#minimize 			1.0e-10 1.0e-10 1000 1000
+
+dump			2 all custom 40000 dump.G12_1_T${temp}.lammpstrj id type x y z #xhi xlo yhi ylo
+dump_modify		2 element C	C C
+dump_modify		2 first yes
+
+#write_restart restart.equ_T${temp}
+
+## thermostate ##
+thermo_style custom		step cpu pe ke temp lx ly press v_xc_x v_xc_y v_xc_z c_pe_c60 c_lennard c_ke_c60 v_vc_x v_vc_y v_vc_z v_x1_x v_x1_y v_x1_z &
+v_x2_x v_x2_y v_x2_z c_pe_sub c_ke_sub v_wc_x v_wc_y v_wc_z v_w12_x v_w12_y v_w12_z c_temp_c60 c_temp_sub
+
+reset_timestep 	0
+fix				4 Graphene 	nvt temp ${temp} ${temp} 0.10
+fix				5 c60 		nvt temp ${temp} ${temp} 0.10
+fix_modify  	4 				temp temp_sub
+fix_modify 		5 				temp temp_c60
+fix				6 fixed setforce 0 0 0
+
+## RUN ##
+reset_timestep 	0
+run				40000000

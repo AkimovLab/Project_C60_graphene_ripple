@@ -1,0 +1,13 @@
+# Execute various input files
+
+
+variable	temp	index   1 5 10 20 30 35 50 60 75 100 150 200 250 300 400 500 600 700 800 900 1000   # simulation temperature(s) 
+label		loop
+
+log 		log.G12_1_T${temp}
+variable 	T		equal		${temp}	
+include		in_GC60.txt
+
+clear
+next		temp
+jump		shell.in	loop
